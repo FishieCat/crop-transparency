@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Image Crop Preview</title>
+  <style>
+    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 1em; gap: 1em; }
+    .preview-container { display: flex; gap: 1em; flex-wrap: wrap; justify-content: center; }
+    .preview { border: 4px dashed; padding: 4px; }
+    img { max-width: 100%; height: auto; display: block; }
+    #downloadBtn { padding: 0.5em 1em; font-size: 1em; }
+  </style>
+</head>
+<body>
+  <h2>Image Crop Preview</h2>
+  <input type="file" accept="image/*" id="fileInput">
+  <div class="preview-container">
+    <div class="preview" id="originalPreview"></div>
+    <div class="preview" id="croppedPreview"></div>
+  </div>
+  <button id="downloadBtn" style="display:none;">Download Cropped</button>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const originalPreview = document.getElementById('originalPreview');
+    const croppedPreview = document.getElementById('croppedPreview');
+    const downloadBtn = document.getElementById('downloadBtn');
+    let croppedBlob;
+
+    function handleImage(file) {
+      const img = new Image();
+      img.onload = () => {
+        originalPreview.innerHTML = '';
+        originalPreview.appendChild(img.cloneNode());
+
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const { data, width, height } = imageData;
+
+        let top = height, bottom = 0, left = width, right = 0;
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            if (data[i + 3] !== 0) {
+              if (x < left) left = x;
+              if (x > right) right = x;
+              if (y < top) top = y;
+              if (y > bottom) bottom = y;
+            }
+          }
+        }
+
+        const cropW = right - left + 1;
+        const cropH = bottom - top + 1;
+
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = cropW;
+        cropCanvas.height = cropH;
+        const cropCtx = cropCanvas.getContext('2d');
+        cropCtx.drawImage(canvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
+
+        croppedPreview.innerHTML = '';
+        const croppedImg = new Image();
+        croppedImg.onload = () => {
+          croppedPreview.appendChild(croppedImg);
+        };
+        croppedImg.src = cropCanvas.toDataURL();
+
+        cropCanvas.toBlob(blob => {
+          croppedBlob = blob;
+          downloadBtn.style.display = 'inline-block';
+        });
+      };
+      img.src = URL.createObjectURL(file);
+    }
+
+    fileInput.addEventListener('change', e => {
+      if (e.target.files[0]) handleImage(e.target.files[0]);
+    });
+
+    document.addEventListener('paste', e => {
+      const item = [...e.clipboardData.items].find(i => i.type.startsWith('image'));
+      if (item) handleImage(item.getAsFile());
+    });
+
+    document.addEventListener('drop', e => {
+      e.preventDefault();
+      if (e.dataTransfer.files[0]) handleImage(e.dataTransfer.files[0]);
+    });
+
+    document.addEventListener('dragover', e => e.preventDefault());
+
+    downloadBtn.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(croppedBlob);
+      a.download = 'cropped.png';
+      a.click();
+    });
+  </script>
+</body>
+</html>
